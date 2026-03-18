@@ -187,7 +187,7 @@ interface GlobalState extends GlobalStateValues {
   resetNTPConfig: () => void;
   addProbePairResult: (result: NTPMeasurement) => void;
   onConnectionReset: () => void;
-  playAudio: (data: { offset: number; when: number; audioIndex?: number }) => void;
+  playAudio: (data: { offset: number; when: number; absoluteStartTime?: number; audioIndex?: number }) => void;
   processSpatialConfig: (config: SpatialConfigType) => void;
   pauseAudio: (data: { when: number }) => void;
   getCurrentTrackPosition: () => number;
@@ -742,9 +742,11 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
           const audioIndex = state.findAudioIndexByUrl(data.audioSource);
           if (audioIndex === null) return;
 
+          const absoluteStartTime = audioContextManager.getContext().currentTime + retryDelayMs / 1000;
           state.playAudio({
             offset: trackPositionAtRetry,
             when: retryDelayMs / 1000,
+            absoluteStartTime,
             audioIndex,
           });
           return;
@@ -767,31 +769,60 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
 
       // Check if track doesn't exist at all
       if (audioIndex === null) {
-        // Track doesn't exist - it was deleted or never existed
-        // Just log and stop - don't retry, don't show toast
         if (state.isPlaying) {
           state.pauseAudio({ when: 0 });
         }
-
         console.warn(`Cannot play audio: Track not found in audioSources: ${data.audioSource}`);
+        return;
+      }
 
-        // NO retry, NO toast - track is gone permanently
+      const audioSourceState = state.audioSources[audioIndex];
+
+      // Demo mode: kick-style synchronous play — no async, no indirection
+      if (IS_DEMO_MODE && audioSourceState?.status === "loaded" && audioSourceState.buffer) {
+        const ctx = audioContextManager.getContext();
+        const inputNode = audioContextManager.getInputNode();
+
+        // Stop old source
+        try {
+          const { sourceNode } = getAudioPlayer(state);
+          sourceNode.onended = null;
+          sourceNode.disconnect();
+          sourceNode.stop();
+        } catch (_) {}
+
+        // Create, connect, start — all synchronous, identical to kick path
+        const startTime = ctx.currentTime + waitTimeSeconds;
+        const newSourceNode = ctx.createBufferSource();
+        newSourceNode.buffer = audioSourceState.buffer;
+        newSourceNode.connect(inputNode);
+        newSourceNode.start(startTime, data.trackTimeSeconds);
+
+        console.log(
+          `[DemoPlay] sync start: ctx=${ctx.currentTime.toFixed(3)} startTime=${startTime.toFixed(3)} offset=${data.trackTimeSeconds}`
+        );
+
+        // Update state after start (non-blocking)
+        set({
+          audioPlayer: { ...get().audioPlayer!, sourceNode: newSourceNode },
+          isPlaying: true,
+          selectedAudioUrl: data.audioSource,
+          playbackStartTime: startTime,
+          playbackOffset: data.trackTimeSeconds,
+          duration: audioSourceState.buffer!.duration,
+        });
         return;
       }
 
       // Check if track exists but is still loading
-      if (state.audioSources[audioIndex]?.status === "loading") {
-        // Track exists but audio buffer isn't ready yet
+      if (audioSourceState?.status === "loading") {
         if (state.isPlaying) {
           state.pauseAudio({ when: 0 });
         }
 
         console.warn(`Cannot play audio: Track still loading: ${data.audioSource}`);
-
-        // Show toast for legitimate loading state
         toast.warning(`"${extractFileNameFromUrl(data.audioSource)}" not loaded yet...`, { id: "schedulePlay" });
 
-        // Retry sync after 1 second - track should load eventually
         const { socket } = getSocket(state);
         setTimeout(() => {
           sendWSRequest({
@@ -803,9 +834,13 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         return;
       }
 
+      // Capture absolute start time NOW (synchronous) so async delays in playAudio don't shift it
+      const absoluteStartTime = audioContextManager.getContext().currentTime + waitTimeSeconds;
+
       state.playAudio({
         offset: data.trackTimeSeconds,
         when: waitTimeSeconds,
+        absoluteStartTime,
         audioIndex,
       });
     },
@@ -1030,7 +1065,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
       return Math.min(playbackOffset + elapsedSinceStart, state.duration);
     },
 
-    playAudio: async (data: { offset: number; when: number; audioIndex?: number }) => {
+    playAudio: async (data: { offset: number; when: number; absoluteStartTime?: number; audioIndex?: number }) => {
       const state = get();
       const { sourceNode, audioContext } = getAudioPlayer(state);
 
@@ -1048,7 +1083,7 @@ export const useGlobalStore = create<GlobalState>((set, get) => {
         sourceNode.stop();
       } catch (_) {}
 
-      const startTime = audioContext.currentTime + data.when;
+      const startTime = data.absoluteStartTime ?? audioContext.currentTime + data.when;
       const audioIndex = data.audioIndex ?? 0;
       const audioSourceState = state.audioSources[audioIndex];
       if (!audioSourceState) {
