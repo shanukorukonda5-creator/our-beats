@@ -2,8 +2,8 @@ FROM oven/bun:1
 
 WORKDIR /app
 
-# Install yt-dlp, ffmpeg and git (git needed for lefthook prepare script)
-RUN apt-get update && apt-get install -y ffmpeg python3 curl git \
+# Install yt-dlp and ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg python3 curl \
   && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
   && chmod a+rx /usr/local/bin/yt-dlp \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y ffmpeg python3 curl git \
 # Copy all workspace files
 COPY . .
 
-# Install dependencies
-RUN bun install
+# Install dependencies - skip prepare scripts (lefthook needs git repo)
+RUN bun install --ignore-scripts
 
 WORKDIR /app/apps/server
 
