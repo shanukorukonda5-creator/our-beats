@@ -8,13 +8,13 @@ RUN apt-get update && apt-get install -y ffmpeg python3 curl \
   && chmod a+rx /usr/local/bin/yt-dlp \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace files
-COPY package.json bun.lock ./
+# Copy all workspace files needed for install
+COPY package.json bun.lock turbo.json ./
 COPY apps/server/package.json ./apps/server/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 
-# Install dependencies
-RUN bun install --production
+# Install all dependencies (workspace aware)
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY apps/server/src ./apps/server/src
