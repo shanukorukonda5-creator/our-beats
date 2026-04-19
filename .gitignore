@@ -17,3 +17,6 @@ local/
 
 .vscode/
 docs/
+
+# YouTube downloaded audio
+apps/yt-audio/

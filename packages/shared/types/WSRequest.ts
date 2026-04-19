@@ -35,6 +35,7 @@ export const ClientActionEnum = z.enum([
   "REORDER_AUDIO_SOURCES", // Reorder audio sources in the room queue
   "SET_METRONOME", // Toggle metronome on/off for all clients
   "SET_LOW_PASS_FREQ", // Set low-pass filter cutoff frequency
+  "YOUTUBE_URL", // Add audio from a YouTube URL
 ]);
 
 export const NTPRequestPacketSchema = z.object({
@@ -161,6 +162,11 @@ export const SetLowPassFreqSchema = z.object({
   freq: z.number().min(LOW_PASS_CONSTANTS.MIN_FREQ).max(LOW_PASS_CONSTANTS.MAX_FREQ),
 });
 
+export const YoutubeUrlSchema = z.object({
+  type: z.literal(ClientActionEnum.enum.YOUTUBE_URL),
+  url: z.string().url(),
+});
+
 export const WSRequestSchema = z.discriminatedUnion("type", [
   PlayActionSchema,
   PauseActionSchema,
@@ -184,6 +190,7 @@ export const WSRequestSchema = z.discriminatedUnion("type", [
   ReorderAudioSourcesSchema,
   SetMetronomeSchema,
   SetLowPassFreqSchema,
+  YoutubeUrlSchema,
 ]);
 export type WSRequestType = z.infer<typeof WSRequestSchema>;
 export type PlayActionType = z.infer<typeof PlayActionSchema>;

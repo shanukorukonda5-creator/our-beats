@@ -4,16 +4,26 @@ import { uploadAudioFile } from "@/lib/api";
 import { cn, trimFileName } from "@/lib/utils";
 import { useCanMutate } from "@/store/global";
 import { useRoomStore } from "@/store/room";
-import { CloudUpload, Plus } from "lucide-react";
+import { useGlobalStore } from "@/store/global";
+import { sendWSRequest } from "@/utils/ws";
+import { ClientActionEnum } from "@beatsync/shared";
+import { CloudUpload, Plus, Youtube } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
+function isYoutubeUrl(url: string) {
+  return /^https?:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/)/.test(url.trim());
+}
 
 export const AudioUploaderMinimal = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [showYtInput, setShowYtInput] = useState(false);
+  const [ytUrl, setYtUrl] = useState("");
   const canMutate = useCanMutate();
   const roomId = useRoomStore((state) => state.roomId);
+  const socket = useGlobalStore((state) => state.socket);
 
   const isDisabled = !canMutate;
 
@@ -80,6 +90,23 @@ export const AudioUploaderMinimal = () => {
     handleFileUpload(file);
   };
 
+  const handleYoutubeSubmit = () => {
+    if (isDisabled || !socket) return;
+    const trimmed = ytUrl.trim();
+    if (!trimmed) return;
+    if (!isYoutubeUrl(trimmed)) {
+      toast.error("Please enter a valid YouTube URL");
+      return;
+    }
+    sendWSRequest({
+      ws: socket,
+      request: { type: ClientActionEnum.enum.YOUTUBE_URL, url: trimmed },
+    });
+    toast.success("YouTube track queued — downloading audio...");
+    setYtUrl("");
+    setShowYtInput(false);
+  };
+
   return (
     <div
       className={cn(
@@ -125,6 +152,47 @@ export const AudioUploaderMinimal = () => {
         disabled={isUploading || isDisabled}
         className="hidden"
       />
+
+      {/* YouTube URL row */}
+      <div className="border-t border-neutral-700/50">
+        {showYtInput ? (
+          <div className="p-2 flex items-center gap-2">
+            <Youtube className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              value={ytUrl}
+              onChange={(e) => setYtUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleYoutubeSubmit();
+                if (e.key === "Escape") { setShowYtInput(false); setYtUrl(""); }
+              }}
+              placeholder="Paste YouTube URL..."
+              className="flex-1 bg-transparent text-xs text-white placeholder:text-neutral-500 focus:outline-none min-w-0"
+            />
+            <button
+              onClick={handleYoutubeSubmit}
+              className="text-xs text-primary-400 hover:text-white transition-colors flex-shrink-0"
+              type="button"
+            >
+              Add
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => !isDisabled && setShowYtInput(true)}
+            disabled={isDisabled}
+            className={cn(
+              "w-full p-2.5 flex items-center gap-2 text-xs transition-colors",
+              isDisabled ? "text-neutral-600 cursor-not-allowed" : "text-neutral-400 hover:text-white"
+            )}
+            type="button"
+          >
+            <Youtube className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <span>Paste YouTube URL</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 };

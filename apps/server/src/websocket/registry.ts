@@ -21,6 +21,7 @@ import { handleReorderAudioSources } from "@/websocket/handlers/handleReorderAud
 import { handleSetMetronome } from "@/websocket/handlers/setMetronome";
 import { handleSetLowPassFreq } from "@/websocket/handlers/setLowPassFreq";
 import { handleSync } from "@/websocket/handlers/sync";
+import { handleYoutubeUrl } from "@/websocket/handlers/handleYoutubeUrl";
 import type { WebsocketRegistry } from "@/websocket/types";
 
 export const WS_REGISTRY: WebsocketRegistry = {
@@ -127,5 +128,9 @@ export const WS_REGISTRY: WebsocketRegistry = {
   [ClientActionEnum.enum.SET_LOW_PASS_FREQ]: {
     handle: handleSetLowPassFreq,
     description: "Set low-pass filter cutoff frequency for all clients",
+  },
+  [ClientActionEnum.enum.YOUTUBE_URL]: {
+    handle: handleYoutubeUrl,
+    description: "Download audio from a YouTube URL and add to room queue",
   },
 };

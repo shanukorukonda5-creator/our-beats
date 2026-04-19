@@ -11,6 +11,9 @@ import { handleWebSocketUpgrade } from "@/routes/websocket";
 import { handleClose, handleMessage, handleOpen } from "@/routes/websocketHandlers";
 import { corsHeaders, errorResponse } from "@/utils/responses";
 import type { WSData } from "@/utils/websocket";
+import { YT_AUDIO_DIR } from "@/websocket/handlers/handleYoutubeUrl";
+import { join } from "path";
+import { existsSync, readFileSync } from "fs";
 
 // Bun.serve with WebSocket support
 const server = Bun.serve<WSData>({
@@ -58,6 +61,21 @@ const server = Bun.serve<WSData>({
           return handleDiscover(req);
 
         default:
+          // Serve locally downloaded YouTube audio
+          if (url.pathname.startsWith("/yt-audio/")) {
+            const fileName = decodeURIComponent(url.pathname.slice("/yt-audio/".length));
+            const filePath = join(YT_AUDIO_DIR, fileName);
+            if (!existsSync(filePath)) return errorResponse("Not found", 404);
+            const bytes = readFileSync(filePath);
+            return new Response(bytes.buffer as ArrayBuffer, {
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "audio/mpeg",
+                "Content-Length": bytes.byteLength.toString(),
+                "Cache-Control": "public, max-age=3600",
+              },
+            });
+          }
           return errorResponse("Not found", 404);
       }
     } catch {
