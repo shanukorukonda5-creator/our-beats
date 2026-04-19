@@ -60,7 +60,9 @@ export const handleYoutubeUrl: HandlerFunction<YoutubeUrlMessage> = async ({
       throw new Error(`yt-dlp failed (exit ${exitCode}): ${errText}`);
     }
 
-    const localUrl = `http://localhost:8080/yt-audio/${encodeURIComponent(fileName)}`;
+    // Use public server URL in production, localhost in dev
+    const serverUrl = process.env.SERVER_URL || "http://localhost:8080";
+    const localUrl = `${serverUrl}/yt-audio/${encodeURIComponent(fileName)}`;
     const sources = room.addAudioSource({ url: localUrl });
 
     sendBroadcast({
